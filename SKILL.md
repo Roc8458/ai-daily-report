@@ -1,122 +1,122 @@
 ---
 name: ai-daily-report
-description: AI 每日早报自动化 skill - 多源抓取国内外 AI 资讯（国外约70%/国内约30%），生成覆盖技术/商业/资本/政策/产品/具身智能六维度的日报，通过用户自配的 SMTP 邮箱（QQ/163/Gmail 等）云端投递。当用户想要搭建 AI 日报、每日资讯邮件推送、新闻聚合自动化时使用。SMTP 授权码由用户自己配置，skill 不内置任何凭据。
-version: 1.0.0
+description: "AI Daily Report — automated multi-source AI news aggregation (11+ sources, 70% international / 30% China), 6-dimension classification, SMTP email delivery. Use when setting up AI daily digest, email newsletter automation, or news aggregation pipelines."
+version: 1.1.0
 author: WorkBuddy community
 license: MIT
 ---
 
 # AI Daily Report（AI 每日早报自动化）
 
+> **中文 | [English](README.md)**
+
 为用户搭建一套全自动 AI 日报系统：**每天定时抓取中外 AI 资讯 → 生成六维度日报 → 通过用户自己的 SMTP 邮箱投递**。全程云端运行，用户设备只需收邮件。
 
-## 核心工作流
+## Core Workflow / 核心工作流
 
 搭建流程共 5 步：
 
 ```
-1. 初始化环境          → bash scripts/setup.sh
-2. 配置用户 SMTP       → 引导用户编辑 .env（绝不能代填授权码）
-3. 测试邮件链路        → python3 scripts/test_smtp.py --send
-4. 试跑一期验证        → python3 scripts/run_daily.py
-5. 创建定时任务        → WorkBuddy 自动化（推荐）或系统 cron
+1. Init environment       → bash scripts/setup.sh
+2. Configure user SMTP    → edit .env (Agent NEVER fills auth codes)
+3. Test email pipeline    → python3 scripts/test_smtp.py --send
+4. Run a trial cycle      → python3 scripts/run_daily.py
+5. Create scheduled task  → WorkBuddy automation (recommended) or system cron
 ```
 
-## 步骤详解
+## Steps / 步骤详解
 
-### 1. 初始化
+### 1. Initialize / 初始化
 
 ```bash
 bash scripts/setup.sh
 ```
 
-脚本会复制 `.env.example` 为 `.env`、创建 `reports/` 与 `logs/` 目录、安装依赖（requests / feedparser / markdown）。
+Copies `.env.example` → `.env`, creates `reports/` and `logs/` dirs, installs Python deps (requests / feedparser / markdown).
 
-### 2. 配置 SMTP（用户自己的凭据）
+### 2. Configure SMTP / 配置 SMTP
 
-**关键原则：SMTP 授权码是用户私密凭据，必须由用户本人填写，Agent 不得代填、不得在对话中索要后写入公开文件。**
+**SECURITY RULE: SMTP auth codes are private credentials. The Agent must NEVER fill them in — the user must edit `.env` themselves.**
 
-引导用户编辑 `.env`，最少只需填 3 项：
+Edit `.env` with just 3 required fields:
 
 ```ini
-SMTP_USER=用户的邮箱
-SMTP_PASS=用户的SMTP授权码
-TO_EMAIL=收件邮箱（发给自己则与 SMTP_USER 相同）
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-smtp-auth-code
+TO_EMAIL=your-email@example.com
 ```
 
-SMTP host/port 会按邮箱域名自动推断（QQ→smtp.qq.com:465、Gmail→smtp.gmail.com:587 等）。各邮箱授权码获取方式见 `references/smtp-guide.md`。
+SMTP host/port is auto-inferred from the email domain (QQ→smtp.qq.com:465, Gmail→smtp.gmail.com:587, etc.). Full provider guide: `references/smtp-guide.md`.
 
-### 3. 测试链路
+### 3. Test Pipeline / 测试链路
 
 ```bash
 python3 scripts/test_smtp.py --send
 ```
 
-会发一封测试邮件，用户确认收到后链路即打通。失败排查见 `references/smtp-guide.md` 的「常见故障」章节。
+Sends a test email. User confirms receipt — pipeline is live. Troubleshooting: `references/smtp-guide.md`.
 
-### 4. 试跑一期
+### 4. Trial Run / 试跑一期
 
 ```bash
 python3 scripts/run_daily.py
 ```
 
-完整执行「抓取 → 生成骨架 → 发送」。
+Full cycle: fetch → generate skeleton → send.
 
-**内容质量增强（重要）**：`generate_report.py` 生成的是结构骨架（标题+链接+分类），Agent 应主动补足两类内容：
-- **中文摘要**：对重点条目（按维度均衡挑选 12-18 条）撰写 2-3 句中文摘要。英文新闻需翻译标题；不可达的源（OpenAI/Anthropic 官方博客、Reddit、GitHub trending、财经媒体）直接用 WebSearch 联网检索最新动态补充，每源最多重试 1 次
-- **今日小结**：提炼 3-5 条当日主线 + 给读者的行动提示
+**Content Enhancement (important)**: `generate_report.py` produces a structural skeleton. The Agent should enhance:
+- **Chinese summaries**: Write 2-3 sentence summaries for 12-18 key items across all dimensions. Translate English titles; use web search for unreachable sources (OpenAI/Anthropic blogs, Reddit, GitHub trending, financial media) — max 1 retry per source
+- **Daily Takeaway**: Distill 3-5 key themes + actionable insights for readers
 
-格式规范详见 `references/report-format.md`。
+Format spec: `references/report-format.md`.
 
-### 5. 定时任务
+### 5. Scheduled Task / 定时任务
 
-**方式 A：WorkBuddy / CodeBuddy 自动化（推荐，全程云端）**
+**Option A: WorkBuddy / CodeBuddy (recommended, cloud-based)**
 
-通过 automation-task-manager 创建每日 08:00 任务，prompt 模板：
+> Execute ai-daily-report daily task: check environment → run `scripts/run_daily.py` → supplement with web search for summaries & GitHub trends → report results. Single source failure doesn't block the pipeline; email failure is logged once, never retried in a loop.
 
-> 执行 ai-daily-report 日报任务：检查 `<skill 安装目录>` 环境完整性（缺失则按 SKILL.md 重建）→ 运行 `scripts/run_daily.py` 抓取并发送 → 对重点条目用联网搜索补充摘要与 GitHub 趋势 → 汇报发送结果。某板块抓取失败仍生成其余板块；邮件发送失败记录一次即结束，严禁死循环重试。
-
-**方式 B：本地 cron（用户自己的服务器）**
+**Option B: Local cron**
 
 ```bash
 crontab -e
-# 每天早上 8 点执行（记得用绝对路径）
 0 8 * * * cd /path/to/ai-daily-report && python3 scripts/run_daily.py >> logs/daily.log 2>&1
 ```
 
-## 信息源架构
+## Source Architecture / 信息源架构
 
-| 类别 | 直抓（实测可通） | 联网搜索兜底 |
-|------|----------------|-------------|
-| 国外 ~70% | TechCrunch AI、The Verge AI RSS、Google AI Blog、arXiv cs.AI、HN Algolia API | OpenAI/Anthropic 官方、Reddit、GitHub trending、Bloomberg/Reuters 等财经媒体 |
-| 国内 ~30% | 量子位、智东西、雷锋网、IT之家、36氪、钛媒体（AI 过滤） | 补充搜索当日重大融资/政策 |
+| Category | Direct Fetch (tested) | Web Search Fallback |
+|----------|----------------------|-------------------|
+| International ~70% | TechCrunch AI, The Verge AI RSS, Google AI Blog, arXiv cs.AI, HN Algolia API | OpenAI/Anthropic official, Reddit, GitHub trending, Bloomberg/Reuters |
+| China ~30% | QbitAI, Zhidx, Leiphone, IT之家, 36Kr, TMTPost (AI-filtered) | Major financing/policy supplements |
 
-完整清单与抓取策略见 `references/sources.md`。任何源失败 1 次即转联网搜索，不阻塞整体流程。
+Full source list: `references/sources.md`. Any failed source is replaced by web search — never blocks the pipeline.
 
-## 目录结构
+## Project Structure / 目录结构
 
 ```
 ai-daily-report/
-├── SKILL.md               ← 本文件
-├── README.md              ← 完整使用文档（GitHub 发布版）
-├── .env.example           ← SMTP 配置模板（用户复制为 .env）
+├── SKILL.md               ← This file
+├── README.md              ← English documentation
+├── README_CN.md           ← Chinese documentation
+├── .env.example           ← SMTP config template (user copies to .env)
 ├── scripts/
-│   ├── setup.sh           ← 一键初始化
-│   ├── fetch_news.py      ← 多源抓取（输出原料 JSON）
-│   ├── generate_report.py ← 生成日报骨架（Agent 再润色）
-│   ├── send_report.py     ← SMTP 通用发送（SSL/STARTTLS 自适应）
-│   ├── run_daily.py       ← 主流程编排
-│   └── test_smtp.py       ← SMTP 链路测试
+│   ├── setup.sh           ← One-click init
+│   ├── fetch_news.py      ← Multi-source fetcher (outputs raw JSON)
+│   ├── generate_report.py ← Report skeleton generator (Agent enhances)
+│   ├── send_report.py     ← SMTP sender (SSL/STARTTLS adaptive)
+│   ├── run_daily.py       ← Main pipeline orchestrator
+│   └── test_smtp.py       ← SMTP connectivity test
 ├── references/
-│   ├── smtp-guide.md      ← 各邮箱授权码获取与故障排查
-│   ├── sources.md         ← 信息源清单与网络策略
-│   └── report-format.md   ← 日报格式规范（六维度）
+│   ├── smtp-guide.md      ← Auth codes & troubleshooting
+│   ├── sources.md         ← Source list & network strategy
+│   └── report-format.md   ← Report format spec (6 dimensions)
 └── assets/
-    └── sample-report.md   ← 日报效果示例
+    └── sample-report.md   ← Sample report
 ```
 
-## 安全须知
+## Security / 安全须知
 
-- `.env`（含授权码）已被 `.gitignore` 排除，**永远不要提交到任何公开仓库**
-- 授权码与登录密码不同，可随时在邮箱设置中重置
-- 多用户/团队部署时建议使用子邮箱或专用发件邮箱
+- `.env` (containing auth codes) is in `.gitignore` — **never commit to any public repo**
+- Auth codes are separate from login passwords — reset anytime in email settings
+- Multi-user deployments: use a dedicated sender email
