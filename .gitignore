@@ -1,0 +1,21 @@
+# 私密配置（授权码）—— 永不提交
+.env
+
+# 运行产物
+reports/
+logs/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
