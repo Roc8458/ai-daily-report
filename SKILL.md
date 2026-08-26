@@ -1,7 +1,7 @@
 ---
 name: ai-daily-report
 description: "AI Daily Report — automated multi-source AI news aggregation (11+ sources, 70% international / 30% China), 6-dimension classification, SMTP email delivery. Use when setting up AI daily digest, email newsletter automation, or news aggregation pipelines."
-version: 1.1.0
+version: 1.2.0
 author: WorkBuddy community
 license: MIT
 ---

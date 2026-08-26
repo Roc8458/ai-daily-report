@@ -167,9 +167,11 @@ ai-daily-report/
 ├── references/
 │   ├── smtp-guide.md      ← Auth code guide & troubleshooting
 │   ├── sources.md         ← Source list & network strategy
-│   └── report-format.md   ← Report format spec
+│   ├── report-format.md   ← Report format spec
+│   └── task-prompt.md     ← Battle-tested scheduled-task prompt (v1.2 cloud spec)
 └── assets/
-    └── sample-report.md   ← Sample report
+    ├── sample-report.md        ← Sample report (Markdown)
+    └── sample-report-email.html ← Sample HTML email (card style)
 ```
 
 ## ❓ FAQ

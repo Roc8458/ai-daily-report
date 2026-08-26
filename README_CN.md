@@ -167,9 +167,11 @@ ai-daily-report/
 ├── references/
 │   ├── smtp-guide.md      ← 授权码获取与故障排查
 │   ├── sources.md         ← 信息源清单与网络策略
-│   └── report-format.md   ← 日报格式规范
+│   ├── report-format.md   ← 日报格式规范
+│   └── task-prompt.md     ← 实战定时任务指令（线上运行版完整规格）
 └── assets/
-    └── sample-report.md   ← 日报效果示例
+    ├── sample-report.md         ← 日报效果示例（Markdown）
+    └── sample-report-email.html ← 邮件效果示例（卡片式 HTML）
 ```
 
 ## ❓ 常见问题
