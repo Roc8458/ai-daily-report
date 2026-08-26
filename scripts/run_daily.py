@@ -24,7 +24,7 @@ def main():
 
     # 1. 抓取
     print("=" * 50)
-    print(f"▶ [{now:%H:%M:%S}] 步骤 1/3：抓取信息源")
+    print(f"▶ [{now:%H:%M:%S}] 步骤 1/4：抓取信息源")
     print("=" * 50)
     r = subprocess.run([sys.executable, str(SCRIPTS / "fetch_news.py"),
                         "--out", str(raw_path)])
@@ -34,7 +34,7 @@ def main():
 
     # 2. 生成骨架
     print("\n" + "=" * 50)
-    print("▶ 步骤 2/3：生成日报骨架")
+    print("▶ 步骤 2/4：生成日报骨架")
     print("=" * 50)
     r = subprocess.run([sys.executable, str(SCRIPTS / "generate_report.py"),
                         str(raw_path), "--out", str(md_path)])
@@ -42,13 +42,23 @@ def main():
         print("❌ 生成脚本执行失败")
         sys.exit(1)
 
-    # 3. 发送
+    # 3. LLM 增强（挑选+摘要+小结；无 key 自动跳过）
+    print("\n" + "=" * 50)
+    print("▶ 步骤 3/4：LLM 增强（挑选/翻译/摘要/小结）")
+    print("=" * 50)
+    r = subprocess.run([sys.executable, str(SCRIPTS / "enhance_report.py"),
+                        str(raw_path), str(md_path), "--out", str(md_path)])
+    # 增强失败不中断：md_path 已有骨架版兜底
+    if r.returncode != 0:
+        print("⚠️ LLM 增强失败，将以骨架版发送")
+
+    # 4. 发送
     if no_send:
         print("\n▶ --no-send 模式：跳过发送。日报在：" + str(md_path))
         return
 
     print("\n" + "=" * 50)
-    print("▶ 步骤 3/3：发送邮件")
+    print("▶ 步骤 4/4：发送邮件")
     print("=" * 50)
     r = subprocess.run([sys.executable, str(SCRIPTS / "send_report.py"), str(md_path)])
     sys.exit(r.returncode)

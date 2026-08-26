@@ -31,16 +31,27 @@ SMTP_PRESETS = {
 
 
 def load_config(env_path=None):
-    """加载 .env 配置（自动推断 SMTP host/port）"""
+    """加载配置：.env 文件优先，缺失的字段从环境变量回退（GitHub Actions 场景）"""
+    import os
     base = Path(env_path) if env_path else Path(__file__).parent.parent / ".env"
-    if not base.exists():
-        return None
     config = {}
-    for line in base.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            config[k.strip()] = v.strip()
+    if base.exists():
+        for line in base.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                config[k.strip()] = v.strip()
+
+    # 环境变量回退：只填充 .env 中没有的键
+    for key in ("SMTP_HOST", "SMTP_PORT", "SMTP_SSL", "SMTP_USER", "SMTP_PASS",
+                "TO_EMAIL", "SENDER_NAME", "MAIL_SUBJECT_PREFIX"):
+        env_val = os.environ.get(key, "").strip()
+        if env_val and not config.get(key):
+            config[key] = env_val
+
+    # .env 和环境变量都没有 → 视为无配置
+    if not config:
+        return None
 
     # 未显式配置 host/port 时按邮箱域名推断
     if "SMTP_HOST" not in config:
