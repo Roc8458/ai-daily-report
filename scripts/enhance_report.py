@@ -244,7 +244,7 @@ def validate_report(md, has_trending):
     rows = [l for l in sec3.splitlines() if l.strip().startswith("|")]
     if has_trending and len(rows) < 5:
         problems.append(f"「三、GitHub 趋势」表格只有 {max(len(rows) - 2, 0)} 行数据，需 5-8 行")
-    if "📌 行动提示" not in md:
+    if "📌" not in md or not re.search(r"📌\s*\**\s*行动提示", md):
         problems.append("「四、今日小结」末尾缺少「📌 行动提示」小节（注意是「行动」不是「行业」）")
     return problems
 
@@ -293,12 +293,16 @@ def main():
          {"role": "user", "content":
              f"【国外候选 {len(raw.get('intl', []))} 条】\n{fmt_candidates(raw.get('intl', []), 'I')}\n\n"
              f"【国内候选 {len(raw.get('cn', []))} 条】\n{fmt_candidates(raw.get('cn', []), 'C')}"}],
-        max_tokens=4096, temperature=0.2, timeout=180)
+        max_tokens=8192, temperature=0.2, timeout=240)
 
     intl_idx, cn_idx = [], []
     if sel_resp:
         msg = sel_resp["choices"][0].get("message", {}) or {}
         text = (msg.get("content") or "") + "\n" + (msg.get("reasoning_content") or "")
+        print(f"  [debug] 选稿响应: finish={sel_resp['choices'][0].get('finish_reason')}"
+              f" content_len={len(msg.get('content') or '')}"
+              f" reason_len={len(msg.get('reasoning_content') or '')}"
+              f" snippet={text[:150]!r}")
         intl_idx, cn_idx = parse_selection(text, len(raw.get("intl", [])), len(raw.get("cn", [])))
         if intl_idx or cn_idx:
             print(f"  LLM 选择：国外 {len(intl_idx)} 条 / 国内 {len(cn_idx)} 条")
