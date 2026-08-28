@@ -42,11 +42,11 @@ SELECT_SYSTEM = """你是新闻选稿主编。根据候选清单（编号 [I*] �
 挑选标准（按优先级）：
 1. AI 相关性：主题必须围绕 AI/大模型/智能体/具身智能/算力/AI 政策；普通科技、地方赛事、无 AI 主线的选稿不选。
 2. 时效性：只选近两日的资讯；明显是旧闻（周年回顾、旧项目重发）的不选。
-3. 内容价值：有具体金额/百分比/模型发布/产品上线/政策动向的优先；纯观点稿、内容空洞的靠后。
+3. 精挑细选：只选有实质内容的条目——有具体金额/百分比/模型发布/产品上线/政策动向、能据此写出 2-3 句实质摘要的优先；标题党、软文、纯观点稿、看完摘要就没信息量的坚决不选。
 4. 六维度轮转均衡（前沿模型与技术/商业与产业/资本市场与巨头/政策与治理/消费级与产品应用/具身智能与物理AI），避免某类新闻霸版。
 5. 热度信号：HN 分数高的优先。
-6. 国外选 12-14 条，国内选 5-7 条；同一事件的多来源报道只选信息最全的一条。
-7. 宁缺毋滥：凑不满就少选。
+6. 国外精选 15 条左右（14-16 条），国内精选 10 条左右（9-11 条）；同一事件的多来源报道只选信息最全的一条。
+7. 宁缺毋滥：达不到标准就少选。
 只输出 JSON，不要任何解释：
 {"intl": [编号数字...], "cn": [编号数字...]}"""
 
@@ -125,17 +125,17 @@ WRITE_SYSTEM = """你是一名 AI 行业资深编辑，把精选资讯加工成�
 
 # 🤖 AI 每日早报 · {日期}（周X）
 （X 由用户消息给出）
-> **导语**：2-3 句。列出本期实际使用的信源名称，说明国外约 70%/国内约 30%、覆盖六维度，并用一句话点出当日主线。
+> **导语**：2-3 句。列出本期实际使用的信源名称，说明国外约 60%/国内约 40%、覆盖六维度，并用一句话点出当日主线。
 
 ## 一、国外动态
-（12-14 条，每条格式：
+（15 条左右，每条格式：
 ### 序号. 【维度标签】中文标题
 2-3 句中文摘要：核心事实（含金额/百分比/公司名/产品名等关键数据）+ 一句行业意义，50-90 字，禁止空话、禁止复述标题。英文标题翻译为中文，保留专有名词原文。
 🔗 [前往 来源名 原文](链接)）
 链接必须原样复制候选清单里的 url，一字不改；来源名用该条的来源。
 
 ## 二、国内动态
-（5-7 条，格式同上）
+（10 条左右，格式同上）
 
 ## 三、GitHub 趋势
 | 项目 | 本周新增 Star | 定位 |
@@ -193,23 +193,36 @@ def build_write_prompt(date_full, selected_intl, selected_cn, trending):
 def call_llm(messages, max_tokens, temperature, timeout=180, retries=2):
     api_key = os.environ.get("LLM_API_KEY", "").strip()
     resp = None
-    for attempt in (1, 2):
-        if attempt > retries:
-            break
+    tokens = max_tokens
+    attempt = 1
+    while attempt <= retries:
         try:
             r = requests.post(
                 f"{BASE_URL}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}",
                          "Content-Type": "application/json"},
                 json={"model": MODEL, "messages": messages,
-                      "temperature": temperature, "max_tokens": max_tokens},
+                      "temperature": temperature, "max_tokens": tokens},
                 timeout=timeout)
             r.raise_for_status()
             resp = r.json()
             break
+        except requests.HTTPError as e:
+            body = e.response.text[:200] if e.response is not None else ""
+            # 服务商不支持所请求的输出上限时降半重试（不消耗重试次数）
+            if (e.response is not None and e.response.status_code == 400
+                    and "max_tokens" in body.lower() and tokens > 8192):
+                tokens = 8192
+                print(f"⚠️ max_tokens={max_tokens} 被拒绝，降为 8192 重试")
+                continue
+            print(f"⚠️ LLM 调用失败（第{attempt}次）：{e} {body[:120]}")
+            attempt += 1
+            if attempt <= retries:
+                time.sleep(10)
         except Exception as e:
             print(f"⚠️ LLM 调用失败（第{attempt}次）：{e}")
-            if attempt < retries:
+            attempt += 1
+            if attempt <= retries:
                 time.sleep(10)
     return resp
 
@@ -237,10 +250,10 @@ def validate_report(md, has_trending):
     sec3 = _section(md, "三、GitHub 趋势", "四、今日小结")
     n1 = len(re.findall(r"^###\s*\d+\.\s*【", sec1, re.M))
     n2 = len(re.findall(r"^###\s*\d+\.\s*【", sec2, re.M))
-    if n1 < 10:
-        problems.append(f"「一、国外动态」只有 {n1} 条，需 10-14 条")
-    if n2 < 4:
-        problems.append(f"「二、国内动态」只有 {n2} 条，需 5-7 条")
+    if n1 < 13:
+        problems.append(f"「一、国外动态」只有 {n1} 条，需 15 条左右（14-16）")
+    if n2 < 8:
+        problems.append(f"「二、国内动态」只有 {n2} 条，需 10 条左右（9-11）")
     rows = [l for l in sec3.splitlines() if l.strip().startswith("|")]
     if has_trending and len(rows) < 5:
         problems.append(f"「三、GitHub 趋势」表格只有 {max(len(rows) - 2, 0)} 行数据，需 5-8 行")
@@ -308,8 +321,8 @@ def main():
             print(f"  LLM 选择：国外 {len(intl_idx)} 条 / 国内 {len(cn_idx)} 条")
     if not intl_idx or not cn_idx:
         print("  ⚠️ 选稿解析失败，使用确定性兜底选稿")
-        intl_idx = heuristic_select(raw.get("intl", []), 13)
-        cn_idx = heuristic_select(raw.get("cn", []), 6)
+        intl_idx = heuristic_select(raw.get("intl", []), 15)
+        cn_idx = heuristic_select(raw.get("cn", []), 10)
 
     sel_intl = [raw["intl"][i] for i in intl_idx] if raw.get("intl") else []
     sel_cn = [raw["cn"][i] for i in cn_idx] if raw.get("cn") else []
@@ -326,7 +339,7 @@ def main():
 
     text, problems = "", []
     for round_no in (1, 2):
-        resp = call_llm(messages, max_tokens=8192, temperature=0.6, timeout=300)
+        resp = call_llm(messages, max_tokens=16384, temperature=0.6, timeout=300)
         if not resp:
             break
         text = resp["choices"][0]["message"]["content"].strip()
