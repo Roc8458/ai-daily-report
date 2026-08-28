@@ -40,11 +40,13 @@ DIMENSIONS = ("前沿模型与技术", "商业与产业", "资本市场与巨头
 
 SELECT_SYSTEM = """你是新闻选稿主编。根据候选清单（编号 [I*] 为国外、[C*] 为国内）挑选当日日报条目。
 挑选标准（按优先级）：
-1. 内容价值：有具体金额/百分比/模型发布/产品上线/政策动向的优先；纯观点稿、内容空洞的靠后。
-2. 六维度轮转均衡（前沿模型与技术/商业与产业/资本市场与巨头/政策与治理/消费级与产品应用/具身智能与物理AI），避免某类新闻霸版。
-3. 热度信号：HN 分数高的优先。
-4. 国外选 12-14 条，国内选 5-7 条；同一事件的多来源报道只选信息最全的一条。
-5. 宁缺毋滥：凑不满就少选。
+1. AI 相关性：主题必须围绕 AI/大模型/智能体/具身智能/算力/AI 政策；普通科技、地方赛事、无 AI 主线的选稿不选。
+2. 时效性：只选近两日的资讯；明显是旧闻（周年回顾、旧项目重发）的不选。
+3. 内容价值：有具体金额/百分比/模型发布/产品上线/政策动向的优先；纯观点稿、内容空洞的靠后。
+4. 六维度轮转均衡（前沿模型与技术/商业与产业/资本市场与巨头/政策与治理/消费级与产品应用/具身智能与物理AI），避免某类新闻霸版。
+5. 热度信号：HN 分数高的优先。
+6. 国外选 12-14 条，国内选 5-7 条；同一事件的多来源报道只选信息最全的一条。
+7. 宁缺毋滥：凑不满就少选。
 只输出 JSON，不要任何解释：
 {"intl": [编号数字...], "cn": [编号数字...]}"""
 
@@ -64,26 +66,55 @@ def fmt_candidates(items, prefix):
 
 
 def parse_selection(text, n_intl, n_cn):
-    """从 LLM 输出解析 {"intl":[..],"cn":[..]}；容错提取数字。返回 (intl_idx, cn_idx)"""
-    def grab(key, bound):
-        m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', text)
-        if not m:
-            return []
-        return [int(x) for x in re.findall(r"\d+", m.group(1)) if int(x) < bound]
+    """从 LLM 输出解析选中编号。多级容错：
+    1) 标准 JSON {"intl":[..],"cn":[..]}
+    2) 带标签行（国外/intl 后跟数字列表）
+    3) 顺序兜底：文本中第一组数字为国外、第二组为国内
+    返回 (intl_idx, cn_idx)"""
+    def clamp(nums, bound):
+        return [x for x in nums if 0 <= x < bound]
 
-    return grab("intl", n_intl), grab("cn", n_cn)
+    m = re.search(r'"intl"\s*:\s*\[([^\]]*)\]', text)
+    j = re.search(r'"cn"\s*:\s*\[([^\]]*)\]', text)
+    if m and j:
+        return (clamp([int(x) for x in re.findall(r"\d+", m.group(1))], n_intl),
+                clamp([int(x) for x in re.findall(r"\d+", j.group(1))], n_cn))
+
+    label = re.search(r'(?:国外|intl|INTL|I\s*组)\D{0,10}((?:\d+\s*[,，、\s]+)*\d+)', text)
+    label_cn = re.search(r'(?:国内|cn|CN|C\s*组)\D{0,10}((?:\d+\s*[,，、\s]+)*\d+)', text)
+    if label and label_cn:
+        return (clamp([int(x) for x in re.findall(r"\d+", label.group(1))], n_intl),
+                clamp([int(x) for x in re.findall(r"\d+", label_cn.group(1))], n_cn))
+
+    groups = re.findall(r"\d+(?:\s*[,，、]\s*\d+){3,}", text)
+    if groups:
+        return (clamp([int(x) for x in re.findall(r"\d+", groups[0])], n_intl),
+                clamp([int(x) for x in re.findall(r"\d+", groups[1])], n_cn) if len(groups) > 1 else [])
+    return [], []
 
 
 def heuristic_select(items, want):
-    """LLM 选稿解析失败时的确定性兜底：有摘要/正文者优先，HN 热度加权。"""
+    """LLM 选稿失败时的确定性兜底：有正文者优先、HN 热度加权，并按来源轮转
+    （每组内按分排序、组间轮转取条），避免单一来源霸版。"""
     def score(it):
         s = 2 if (it.get("summary") or it.get("content")) else 0
         m = re.search(r"HN (\d+)", it.get("meta", ""))
         if m:
             s += min(int(m.group(1)) / 50, 3)
         return s
-    ranked = sorted(range(len(items)), key=lambda i: score(items[i]), reverse=True)
-    return ranked[:want]
+
+    by_source = {}
+    for i, it in enumerate(items):
+        by_source.setdefault(it.get("source", "?"), []).append(i)
+    queues = [sorted(idx, key=lambda i: score(items[i]), reverse=True)
+              for idx in by_source.values()]
+    queues.sort(key=len, reverse=True)
+    picked = []
+    while len(picked) < want and any(queues):
+        for q in queues:
+            if q and len(picked) < want:
+                picked.append(q.pop(0))
+    return picked
 
 
 # ---------- 阶段2：写作 ----------
@@ -213,8 +244,8 @@ def validate_report(md, has_trending):
     rows = [l for l in sec3.splitlines() if l.strip().startswith("|")]
     if has_trending and len(rows) < 5:
         problems.append(f"「三、GitHub 趋势」表格只有 {max(len(rows) - 2, 0)} 行数据，需 5-8 行")
-    for dim in DIMENSIONS:
-        pass  # 维度标签不作硬校验，避免过度重试
+    if "📌 行动提示" not in md:
+        problems.append("「四、今日小结」末尾缺少「📌 行动提示」小节（注意是「行动」不是「行业」）")
     return problems
 
 
@@ -262,13 +293,15 @@ def main():
          {"role": "user", "content":
              f"【国外候选 {len(raw.get('intl', []))} 条】\n{fmt_candidates(raw.get('intl', []), 'I')}\n\n"
              f"【国内候选 {len(raw.get('cn', []))} 条】\n{fmt_candidates(raw.get('cn', []), 'C')}"}],
-        max_tokens=1024, temperature=0.2, timeout=120)
+        max_tokens=4096, temperature=0.2, timeout=180)
 
     intl_idx, cn_idx = [], []
     if sel_resp:
-        text = sel_resp["choices"][0]["message"]["content"]
+        msg = sel_resp["choices"][0].get("message", {}) or {}
+        text = (msg.get("content") or "") + "\n" + (msg.get("reasoning_content") or "")
         intl_idx, cn_idx = parse_selection(text, len(raw.get("intl", [])), len(raw.get("cn", [])))
-        print(f"  LLM 选择：国外 {len(intl_idx)} 条 / 国内 {len(cn_idx)} 条")
+        if intl_idx or cn_idx:
+            print(f"  LLM 选择：国外 {len(intl_idx)} 条 / 国内 {len(cn_idx)} 条")
     if not intl_idx or not cn_idx:
         print("  ⚠️ 选稿解析失败，使用确定性兜底选稿")
         intl_idx = heuristic_select(raw.get("intl", []), 13)
