@@ -13,10 +13,10 @@ Automated AI news digest — fetches **10 direct sources plus search supplements
 
 ## Preview
 
-Every morning you receive an HTML email like this:
+Every other morning you receive an HTML email like this:
 
-- **International (~70%)**: OpenAI / Anthropic / Google / Meta / Nvidia — models, funding, IPOs, org changes; EU AI Act and policy; LinkedIn / Gemini / Meta AI product updates
-- **China (~30%)**: Domestic LLM commercialization, robotics & embodied AI, vertical AI funding, DeepSeek and other Chinese model dynamics
+- **International (~60%, ~15 items)**: OpenAI / Anthropic / Google / Meta / Nvidia — models, funding, IPOs, org changes; EU AI Act and policy; LinkedIn / Gemini / Meta AI product updates
+- **China (~40%, ~10 items)**: Domestic LLM commercialization, robotics & embodied AI, vertical AI funding, DeepSeek and other Chinese model dynamics
 - **GitHub Trends**: Weekly hottest AI open-source repos (with star growth)
 - **Daily Takeaway**: 3–5 key themes + actionable insights
 
@@ -24,7 +24,7 @@ Every morning you receive an HTML email like this:
 
 | Feature | Description |
 |---------|-------------|
-| 🌍 **Global + China** | ~70% international / ~30% Chinese, balanced across 6 dimensions |
+| 🌍 **Global + China** | ~60% international / ~40% Chinese (~15 / ~10 items), balanced across 6 dimensions |
 | 📡 **10 Direct Sources** | TechCrunch, The Verge, Google AI Blog, HN, arXiv, QbitAI, Zhidx, Leiphone, IT之家, TMTPost |
 | 🔎 **Search Supplement** | Policy/funding dimensions auto-filled via Google News RSS when direct fetch is thin |
 | 📈 **GitHub Trending** | Weekly trending board scraped directly (repo + weekly star growth), table never empty |
@@ -89,7 +89,7 @@ Check your inbox 🎉
 
 ### Option A: GitHub Actions (Recommended)
 
-The repo ships with [`.github/workflows/daily.yml`](.github/workflows/daily.yml) — runs daily at 08:00 Beijing time (UTC 00:00) entirely in the cloud. Configure these repository secrets/variables:
+The repo ships with [`.github/workflows/daily.yml`](.github/workflows/daily.yml) — publishes **every 2 days** at 08:00 Beijing time (UTC 00:00) entirely in the cloud. Configure these repository secrets/variables:
 
 | Secret / Variable | Value |
 |-------------------|-------|
@@ -119,8 +119,8 @@ crontab -e
 ```
 🤖 AI Daily Report · YYYY-MM-DD (Day of Week)
 ├── Intro (sources used + source ratio + dimensions covered)
-├── I. International News (12–14 numbered items: dimension tag + Chinese title + content-based summary + link)
-├── II. China News (5–7 items, same format)
+├── I. International News (~15 numbered items: dimension tag + Chinese title + content-based summary + link)
+├── II. China News (~10 items, same format)
 ├── III. GitHub Trends (5–8 repos table with weekly star growth + weekly open-source recap)
 ├── IV. Daily Takeaway (3–5 themes + 📌 action items)
 └── V. Source Notes (+ disclaimer)
