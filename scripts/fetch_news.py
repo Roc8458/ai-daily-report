@@ -162,13 +162,15 @@ def fetch_google_ai_blog(limit=10):
 
 
 def fetch_hackernews(limit=15):
-    """HN Algolia API（主站被墙时的替代通道）"""
+    """HN Algolia API（主站被墙时的替代通道），只取近 48 小时且 >20 分"""
     try:
+        import time as _time
+        since = int(_time.time()) - 48 * 3600
         r = requests.get(
             "https://hn.algolia.com/api/v1/search_by_date",
             params={"query": "AI OR LLM OR OpenAI OR Claude OR GPT OR agent",
                     "tags": "story", "hitsPerPage": 40,
-                    "numericFilters": "points>20"},
+                    "numericFilters": f"points>20,created_at_i>{since}"},
             headers=HEADERS, timeout=12)
         hits = r.json().get("hits", [])
         out = []
