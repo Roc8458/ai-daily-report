@@ -48,14 +48,14 @@ GH_AI_KEYWORDS = [
     "人工智能", "大模型", "智能",
 ]
 
-# Google News 检索补充查询（when:2d 限定近两天）
+# Google News 检索补充查询（when:2d 限定近两天，与隔日刊窗口一致）
 GNEWS_INTL_QUERIES = [
-    ("AI funding OR investment", 8),
-    ('AI regulation OR "AI Act" OR AI policy', 8),
+    ("AI funding OR investment when:2d", 8),
+    ('AI regulation OR "AI Act" OR AI policy when:2d', 8),
 ]
 GNEWS_CN_QUERIES = [
-    ("人工智能 融资", 8),
-    ("AI 监管 OR 大模型 政策", 8),
+    ("人工智能 融资 when:2d", 8),
+    ("AI 监管 OR 大模型 政策 when:2d", 8),
 ]
 
 # 这些域名的页面不值得抓正文（聚合页/讨论页/已有摘要）
