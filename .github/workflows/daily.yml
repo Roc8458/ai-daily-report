@@ -1,11 +1,13 @@
 # AI Daily Report — 每日早报云端自动化
-# 触发：UTC 00:00（北京时间 08:00）· GitHub 定时有 ±10~30 分钟漂移属正常
-# 手动触发：仓库 Actions 页 → AI Daily Report → Run workflow（可勾选"仅测试，不发邮件"）
+# 触发：UTC 00:00（北京时间 08:00）· GitHub 定时有 ±10~90 分钟漂移属正常
+# 频率：每两天一期（奇偶日门控：与 2026-08-28 同奇偶的 UTC 日期运行，下一期 08-30）
+#       Actions cron 不支持隔日，故每日触发、由 Schedule gate 跳过非发行日
+# 手动触发：仓库 Actions 页 → AI Daily Report → Run workflow（不受门控限制，可勾选"仅测试，不发邮件"）
 name: AI Daily Report
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # UTC 00:00 = Asia/Shanghai 08:00
+    - cron: "0 0 * * *"   # UTC 00:00 = Asia/Shanghai 08:00（发行日由下方门控决定）
   workflow_dispatch:
     inputs:
       no_send:
@@ -27,14 +29,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Schedule gate (publish every 2 days)
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"   # 手动触发始终运行
+            exit 0
+          fi
+          # 与 2026-08-28（parity=1）同奇偶的 UTC 日期发行
+          if [ $(($(date -u +%s) / 86400 % 2)) -eq 1 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ 非发行日（隔日发行），本次跳过"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.11"
 
       - name: Install deps
+        if: steps.gate.outputs.run == 'true'
         run: pip install -q requests feedparser markdown
 
       - name: Run pipeline (fetch → skeleton → LLM enhance → send)
+        if: steps.gate.outputs.run == 'true'
         env:
           # LLM（小米 MiMo，OpenAI 兼容接口）
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
@@ -53,7 +73,7 @@ jobs:
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         with:
           name: report-${{ github.run_id }}
           path: reports/*.md
