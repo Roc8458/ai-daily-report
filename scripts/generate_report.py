@@ -53,7 +53,7 @@ def build_report(data: dict, date_full: str) -> str:
     lines = []
 
     lines.append(f"# 🤖 AI 每日早报 · {date_full}\n")
-    lines.append("> **导语**：本期综合国内外多渠道信息源生成，国外内容约 70%、国内约 30%。"
+    lines.append("> **导语**：本期综合国内外多渠道信息源生成，国外内容约 60%、国内约 40%。"
                  f"共收录 {len(intl) + len(cn)} 条资讯，覆盖维度：模型技术、商业产业、资本巨头、政策治理、"
                  "消费产品、具身智能。摘要与小结由 LLM 综合撰写。\n")
     lines.append("---\n")
