@@ -8,15 +8,18 @@ import json
 import sys
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 BASE = Path(__file__).parent.parent
 SCRIPTS = Path(__file__).parent
 
+# 报告日期按北京时间计（Actions 机器是 UTC，凌晨漂移时也不跨天）
+CN_TZ = timezone(timedelta(hours=8))
+
 
 def main():
     no_send = "--no-send" in sys.argv
-    now = datetime.now()
+    now = datetime.now(CN_TZ)
     date_file = now.strftime("%Y-%m-%d")
     raw_path = BASE / "reports" / f"{date_file}-raw.json"
     md_path = BASE / "reports" / f"{date_file}.md"
