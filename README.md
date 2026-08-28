@@ -2,7 +2,7 @@
 
 > **[中文](README_CN.md) | English**
 
-Automated AI news digest — fetches **11+ sources** covering global and Chinese AI developments, generates a **6-dimension report**, and delivers it to your inbox via your own SMTP email.
+Automated AI news digest — fetches **10 direct sources plus search supplements** covering global and Chinese AI developments, generates a **6-dimension report**, and delivers it to your inbox via your own SMTP email.
 
 **Runs 100% in the cloud** — your computer doesn't need to be on.
 
@@ -25,12 +25,15 @@ Every morning you receive an HTML email like this:
 | Feature | Description |
 |---------|-------------|
 | 🌍 **Global + China** | ~70% international / ~30% Chinese, balanced across 6 dimensions |
-| 📡 **11+ Sources** | TechCrunch, The Verge, Google AI Blog, HN, arXiv, QbitAI, Zhidx, Leiphone, IT之家, 36Kr, TMTPost |
-| 🔎 **Search Fallback** | Failed sources auto-fallback to web search (Agent mode), no dead ends |
+| 📡 **10 Direct Sources** | TechCrunch, The Verge, Google AI Blog, HN, arXiv, QbitAI, Zhidx, Leiphone, IT之家, TMTPost |
+| 🔎 **Search Supplement** | Policy/funding dimensions auto-filled via Google News RSS when direct fetch is thin |
+| 📈 **GitHub Trending** | Weekly trending board scraped directly (repo + weekly star growth), table never empty |
+| 📝 **Content-Based Summaries** | Article bodies fetched concurrently and fed to the LLM — summaries are written from real content, not headlines |
+| ✅ **Two-Stage LLM Pipeline** | Stage 1 selects news by value with dimension rotation; Stage 2 writes the report from article content; output is programmatically validated with one feedback-retry round |
 | 📧 **Universal SMTP** | QQ / 163 / Gmail / Outlook / Foxmail / corporate email — all supported |
 | 🎨 **HTML Email** | Card-style HTML + plain-text fallback, clickable links |
-| ☁️ **Cloud Scheduling** | One-click WorkBuddy/CodeBuddy integration (daily 08:00), or local cron |
-| 🔒 **Secure** | `.env` gitignored, credentials never committed |
+| ☁️ **Cloud Scheduling** | GitHub Actions (daily 08:00 CST), WorkBuddy/CodeBuddy, or local cron |
+| 🔒 **Secure** | `.env` gitignored, credentials in GitHub Secrets |
 
 ## 🚀 Quick Start
 
@@ -84,11 +87,26 @@ Check your inbox 🎉
 
 ## ⏰ Scheduling
 
-### Option A: WorkBuddy / CodeBuddy (Recommended)
+### Option A: GitHub Actions (Recommended)
+
+The repo ships with [`.github/workflows/daily.yml`](.github/workflows/daily.yml) — runs daily at 08:00 Beijing time (UTC 00:00) entirely in the cloud. Configure these repository secrets/variables:
+
+| Secret / Variable | Value |
+|-------------------|-------|
+| `SMTP_USER` / `SMTP_PASS` / `TO_EMAIL` | SMTP account, auth code, recipient |
+| `LLM_API_KEY` (secret) | API key of any OpenAI-compatible LLM |
+| `LLM_BASE_URL` (variable, optional) | Default `https://api.xiaomimimo.com/v1` |
+| `LLM_MODEL` (variable, optional) | Default `mimo-v2.5` |
+
+Manual test runs: Actions → AI Daily Report → Run workflow → check "test only (no email)".
+
+> Note: GitHub Actions scheduled runs can drift by tens of minutes to a few hours under queue load.
+
+### Option B: WorkBuddy / CodeBuddy
 
 > Create a daily task at 08:00: run the ai-daily-report pipeline — check environment, fetch sources, generate report, send email, report results.
 
-### Option B: Local cron
+### Option C: Local cron
 
 ```bash
 crontab -e
@@ -100,11 +118,12 @@ crontab -e
 
 ```
 🤖 AI Daily Report · YYYY-MM-DD (Day of Week)
-├── Intro (source ratio + dimensions covered)
-├── I. International News (~12 items: dimension tag + Chinese title + summary + link)
-├── II. China News (~6 items: tag + title + summary + source)
-├── III. GitHub Trends (3–5 repos table with weekly star growth)
-└── IV. Daily Takeaway (3–5 themes + action items)
+├── Intro (sources used + source ratio + dimensions covered)
+├── I. International News (12–14 numbered items: dimension tag + Chinese title + content-based summary + link)
+├── II. China News (5–7 items, same format)
+├── III. GitHub Trends (5–8 repos table with weekly star growth + weekly open-source recap)
+├── IV. Daily Takeaway (3–5 themes + 📌 action items)
+└── V. Source Notes (+ disclaimer)
 ```
 
 **6 Dimensions**: Frontier Models & Tech · Business & Industry · Capital & Giants · Policy & Governance · Consumer Products · Embodied AI & Robotics
@@ -138,16 +157,20 @@ python3 scripts/fetch_news.py --intl techcrunch,hackernews --cn qbitai,zhidx
 ## 🧩 How It Works
 
 ```
-fetch_news.py → raw JSON (11+ sources)
+fetch_news.py → raw JSON (10 direct sources + Google News supplement
+                 + GitHub Trending weekly board + concurrent article-body fetch)
        ↓
-generate_report.py → Markdown skeleton (6-dimension classified)
+generate_report.py → Markdown skeleton (6-dimension classified, fallback output)
        ↓
-Agent enhancement (optional): web search fallback + Chinese summaries + daily takeaway
+enhance_report.py (two-stage LLM):
+  stage 1 — select news by value, dimension rotation, freshness
+  stage 2 — write the full report from article content
+  validation — format check (title/5 sections/counts/table), one feedback-retry
        ↓
 send_report.py → HTML email via SMTP
 ```
 
-**Scripts handle data structure; Agent handles content quality** — that's the design philosophy.
+**Scripts handle data structure; LLM handles content quality** — that's the design philosophy.
 
 ## 📁 Project Structure
 
@@ -159,8 +182,9 @@ ai-daily-report/
 ├── .env.example           ← SMTP config template
 ├── scripts/
 │   ├── setup.sh           ← One-click init
-│   ├── fetch_news.py      ← Multi-source fetcher
-│   ├── generate_report.py ← Report skeleton generator
+│   ├── fetch_news.py      ← Multi-source fetcher (direct + search supplement + trending + body fetch)
+│   ├── generate_report.py ← Report skeleton generator (fallback)
+│   ├── enhance_report.py  ← Two-stage LLM enhancement (select + write + validate)
 │   ├── send_report.py     ← SMTP sender (SSL/STARTTLS adaptive)
 │   ├── run_daily.py       ← Main pipeline
 │   └── test_smtp.py       ← SMTP connectivity test
