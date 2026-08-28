@@ -25,12 +25,15 @@
 | 特性 | 说明 |
 |------|------|
 | 🌍 **中外配比** | 国外约 70% / 国内约 30%，默认均衡覆盖六维度 |
-| 📡 **11+ 信息源** | TechCrunch / The Verge / Google AI Blog / HN / arXiv / 量子位 / 智东西 / 雷锋网 / IT之家 / 36氪 / 钛媒体 |
-| 🔎 **搜索兜底** | 抓取失败的源自动转联网搜索（Agent 模式），不空跑 |
+| 📡 **10 直抓源** | TechCrunch / The Verge / Google AI Blog / HN / arXiv / 量子位 / 智东西 / 雷锋网 / IT之家 / 钛媒体 |
+| 🔎 **检索补充** | 政策、资本等维度由 Google News RSS 自动补位，不空跑 |
+| 📈 **GitHub 趋势** | 直抓 GitHub Trending 周榜（仓库 + 周增 Star），趋势表不再空缺 |
+| 📝 **基于正文的摘要** | 并发抓取候选文章正文喂给 LLM——摘要有真实内容，不再复述标题 |
+| ✅ **两阶段 LLM 管线** | 阶段1 按价值选稿（维度轮转、时效过滤）；阶段2 基于正文写作；产出程序化校验，不达标自动反馈重写 |
 | 📧 **SMTP 通用** | QQ / 163 / Gmail / Outlook / Foxmail / 企业邮箱……授权码全部用户自配 |
 | 🎨 **邮件排版** | 卡片式 HTML 邮件 + 纯文本降级，标题分级、表格、链接可点击 |
-| ☁️ **云端定时** | 一键接入 WorkBuddy / CodeBuddy 自动化（每日 08:00），也支持本地 cron |
-| 🔒 **安全设计** | `.env` 默认 gitignore，授权码永不入库 |
+| ☁️ **云端定时** | GitHub Actions（每日 08:00）/ WorkBuddy / CodeBuddy，也支持本地 cron |
+| 🔒 **安全设计** | `.env` 默认 gitignore，云端凭据走 GitHub Secrets |
 
 ## 🚀 快速开始
 
@@ -84,11 +87,26 @@ python3 scripts/run_daily.py           # 完整跑一期
 
 ## ⏰ 定时运行
 
-### 方式 A：WorkBuddy / CodeBuddy 自动化（推荐）
+### 方式 A：GitHub Actions（推荐）
+
+仓库自带 [`.github/workflows/daily.yml`](.github/workflows/daily.yml)——每天北京时间 08:00（UTC 00:00）全程云端运行，电脑不用开机。需在仓库 Settings 配置：
+
+| Secret / Variable | 说明 |
+|-------------------|------|
+| `SMTP_USER` / `SMTP_PASS` / `TO_EMAIL` | SMTP 账号、授权码、收件邮箱 |
+| `LLM_API_KEY`（secret） | 任意 OpenAI 兼容大模型的 API Key |
+| `LLM_BASE_URL`（variable，可选） | 默认 `https://api.xiaomimimo.com/v1` |
+| `LLM_MODEL`（variable，可选） | 默认 `mimo-v2.5` |
+
+手动测试：Actions → AI Daily Report → Run workflow → 勾选「仅测试，不发邮件」。
+
+> 注：GitHub Actions 定时触发在高峰期可能有几十分钟到数小时的漂移。
+
+### 方式 B：WorkBuddy / CodeBuddy 自动化
 
 > 创建每日 08:00 定时任务：执行 ai-daily-report 日报流程——检查环境、抓取信息源、生成日报、发送邮件、汇报结果。
 
-### 方式 B：本地 cron
+### 方式 C：本地 cron
 
 ```bash
 crontab -e
@@ -100,11 +118,12 @@ crontab -e
 
 ```
 🤖 AI 每日早报 · YYYY年MM月DD日（周X）
-├── 导语（信息源比例与覆盖维度）
-├── 一、国外动态（~12条：维度标签 + 中文标题 + 摘要 + 原文链接）
-├── 二、国内动态（~6条：标签 + 标题 + 摘要 + 来源）
-├── 三、GitHub 趋势（3-5 个项目表格，含周增 Star）
-└── 四、今日小结（3-5 条主线 + 行动提示）
+├── 导语（实际信源 + 比例 + 当日主线）
+├── 一、国外动态（12-14 条：维度标签 + 中文标题 + 基于正文的摘要 + 原文链接）
+├── 二、国内动态（5-7 条，同上格式）
+├── 三、GitHub 趋势（5-8 个项目表格，含周增 Star + 开源趋势总结）
+├── 四、今日小结（3-5 条主线 + 📌行动提示）
+└── 五、信息来源说明（+ 免责声明）
 ```
 
 **六维度**：前沿模型与技术 / 商业与产业 / 资本市场与巨头 / 政策与治理 / 消费级与产品应用 / 具身智能与物理 AI
@@ -138,16 +157,20 @@ python3 scripts/fetch_news.py --intl techcrunch,hackernews --cn qbitai,zhidx
 ## 🧩 工作原理
 
 ```
-fetch_news.py → 原料 JSON（11+ 源）
+fetch_news.py → 原料 JSON（10 直抓源 + Google News 检索补位
+                + GitHub Trending 周榜 + 并发正文抓取）
        ↓
-generate_report.py → Markdown 骨架（六维度分类）
+generate_report.py → Markdown 骨架（六维度分类，兜底输出）
        ↓
-Agent 增强（可选）：联网搜索兜底 + 中文摘要 + 今日小结
+enhance_report.py 两阶段 LLM：
+  阶段1 选稿——按价值排序、维度轮转、时效过滤
+  阶段2 写作——基于文章正文写完整日报
+  校验——标题/五节/条数/表格程序化检查，不达标反馈重写一次
        ↓
 send_report.py → HTML 邮件（SMTP 发送）
 ```
 
-**脚本管数据结构，Agent 管内容质量**——这是本项目的设计哲学。
+**脚本管数据结构，LLM 管内容质量**——这是本项目的设计哲学。
 
 ## 📁 目录结构
 
@@ -159,8 +182,9 @@ ai-daily-report/
 ├── .env.example           ← SMTP 配置模板
 ├── scripts/
 │   ├── setup.sh           ← 一键初始化
-│   ├── fetch_news.py      ← 多源抓取
-│   ├── generate_report.py ← 日报骨架生成
+│   ├── fetch_news.py      ← 多源抓取（直抓+检索补位+Trending+正文抓取）
+│   ├── generate_report.py ← 日报骨架生成（兜底）
+│   ├── enhance_report.py  ← 两阶段 LLM 增强（选稿+写作+校验）
 │   ├── send_report.py     ← SMTP 邮件发送（SSL/STARTTLS 自适应）
 │   ├── run_daily.py       ← 主流程编排
 │   └── test_smtp.py       ← SMTP 链路测试
